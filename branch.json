@@ -1,0 +1,7 @@
+{"name":"muzo",
+"description":"test branch",
+"templateId":"52d340b1-beda-4d17-b9f7-cc23872e8281",
+"networkAcceleration":"NONE",
+"tcpmaximumSegmentSize":1330,
+"speedTier":{"id":91},
+"branchPackage":{"id":115}}
