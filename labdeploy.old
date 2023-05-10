@@ -1,0 +1,271 @@
+'''
+Python script to create and delete Nuage SDWAN Portal Resellers,Subscribers and Branches via Portal API
+Author: Muzaffer Kahraman (Muzo) 
+v 1.0 2023
+
+python .\labdeploy.py create reseller --name reseller1 --templateFile c:/pydev/sdwanportal-automation/reseller.json
+python .\labdeploy.py delete reseller --name abcreseller
+'''
+
+#!/usr/bin/env python
+
+import argparse
+import requests
+import logging
+import json
+
+# This function retrieves the token for the authorization of the further requests
+def getToken(user,password,org):
+    
+    headers={"accept": "application/json",
+    "Content-Type": "application/json" }
+
+    data={
+      "username": "{}".format(user),
+      "password": "{}".format(password),
+      "organization": "{}".format(org)
+    }
+    
+    res=requests.post(auth_url, headers=headers,json=data).json()
+    
+    token=res['accessToken']
+    
+    return token
+
+# This function returns the ID of a given name for reseller, subscriber and branch
+# * vsdID id returned for branch
+def getID(token,type,name,*args):
+
+    if args:
+        parentID=args[0]
+    
+    if type == "reseller":
+        url= portal_url + "/organizations/1/resellers"
+        res=sendAPI(url,token,"get")      
+    
+    if type == "subscriber":
+        url= portal_url + "/organizations/"+parentID+"/subscribers"
+        res=sendAPI(url,token,"get")   
+      
+    if type == "branch":
+        url= portal_url + "/organizations/"+parentID+"/branches"
+        res=sendAPI(url,token,"get")   
+       
+    if str(res) == "<Response [200]>":
+        A=res.json()
+        for item in A:
+            if item.get("name")==name:
+                if type == "branch":
+                    id=str(item.get("vsdId"))
+                else:
+                    id=str(item.get("id"))
+                return(id)
+
+# This function sets the headers and send the appropriate API request
+# json data is optional and is provided as *args 
+def sendAPI(url,token,method,*args):
+
+    headers={"Content-Type": "application/json",
+        "Authorization":"Bearer "+token,
+        "client_id": client_id,
+        "x-vns-pagesize":"2000"
+        }
+    
+    if args:
+        data=args[0]
+
+    if method == "get":
+        res=requests.get(url, headers=headers,verify=False)
+    
+    if method == "del":
+        res=requests.delete(url, headers=headers,verify=False)
+    
+    if method == "post":
+        res=requests.post(url, headers=headers,json=data,verify=False)
+    
+    return res
+      
+
+def createReseller(token,name,jsonData):
+    
+    url= portal_url + "/organizations/1"
+
+    res=sendAPI(url,token,"post",jsonData)
+  
+    if str(res) == "<Response [200]>":
+        message="200 - Reseller {} created sucessfully".format(name)
+    else:
+        message=str(res) + " Failure in creating the reseller {}".format(name)
+    
+    logging.info(message)
+    print(message)
+
+
+def createSubscriber(token,name,parentName,jsonData):
+   
+    if parentName == "csp":
+        parentID=1
+    else:
+        parentID=getID(token,"reseller",parentName)
+    
+    url= portal_url + "/organizations/"+str(parentID)
+
+    res=sendAPI(url,token,"post",jsonData)
+  
+    if str(res) == "<Response [200]>":
+        message="200 - Subscriber {} created sucessfully under {}".format(name,parentName)
+    else:
+        message=str(res) + " Failure in creating the subscriber {} under {}".format(name,parentName)
+    
+    logging.info(message)
+    print(message)
+       
+def createBranch(token,name,orgName,parentName,jsonData):
+
+    if parentName == "csp":
+        parentID=1
+    else:
+        parentID=getID(token,"reseller",parentName)
+    
+    orgID=getID(token,"subscriber",orgName,str(parentID))
+
+    url= portal_url + "/organizations/"+orgID+"/branches"
+
+    res=sendAPI(url,token,"post",jsonData)
+  
+    if str(res) == "<Response [200]>":
+        message="200 - Branch {} created sucessfully under {} of the parent {}".format(name,orgName,parentName)
+    else:
+        message=str(res) + " Failure in creating the branch {} under {} of the parent {}".format(name,orgName,parentName)
+    
+    logging.info(message)
+    print(message)
+    
+
+def deleteReseller(token,name):
+
+    id=getID(token,"reseller",name)
+    url= portal_url + "/organizations/"+id
+    res=sendAPI(url,token,"del")
+  
+    if str(res) == "<Response [200]>":
+        message="200 - Reseller {} deleted sucessfully".format(name)
+    else:
+        message=str(res) + " Failure in deleting the reseller {}".format(name)
+    
+    logging.info(message)
+    print(message)
+
+
+def deleteSubscriber(token,name,parentName):
+
+    if parentName == "csp":
+        parentID=1
+    else:
+        parentID=getID(token,"reseller",parentName)
+    
+    orgID=getID(token,"subscriber",name,str(parentID))
+    url= portal_url + "/organizations/"+orgID
+    res=sendAPI(url,token,"del")
+  
+    if str(res) == "<Response [200]>":
+        message="200 - Subscriber {} deleted sucessfully under {}".format(name,parentName)
+    else:
+        message=str(res) + " Failure in deleting the subscirber {} under {}".format(name,parentName)
+    
+    logging.info(message)
+    print(message)
+
+
+def deleteBranch(token,name,orgName,parentName):
+    
+    if parentName == "csp":
+        parentID=1
+    else:
+        parentID=getID(token,"reseller",parentName)
+    
+    orgID=getID(token,"subscriber",orgName,str(parentID))
+    branchID=getID(token,"branch",name,orgID)
+    
+    url= portal_url + "/organizations/"+orgID+"/branches/"+str(branchID)
+    res=sendAPI(url,token,"del")
+  
+    if str(res) == "<Response [200]>":
+        message="200 - Branch {} deleted sucessfully under {} of the parent {}".format(name,orgName,parentName)
+    else:
+        message=str(res) + " Failure in deleting the branch {} under {} of the parent {}".format(name,orgName,parentName)
+    
+    logging.info(message)
+    print(message)
+
+
+if __name__ == "__main__":
+
+    # Read the creds.json file and assign the variables accordingly
+    f=open('creds.json','r')
+    creds=json.load(f)
+    username=creds["username"]
+    password=creds["password"]
+    org=creds["org"]
+    portal_url=creds["portal_url"]
+    auth_url=creds["auth_url"]
+    client_id=creds["client_id"]
+    f.close()
+
+    # Select the logfile path (linux/windows) and set the log file format
+    # logfile = "/var/log/labdeploy.log"
+    logfile = "c:/tmp/labdeploy.log"
+    logging.basicConfig(filename=logfile,level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
+
+    # Set the command line positional and optional parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument("op", choices=["create","delete"],help="creates the to be selected object")
+    subparser = parser.add_subparsers(dest='ob')
+    reseller = subparser.add_parser('reseller')
+    subscriber = subparser.add_parser('subscriber')
+    branch = subparser.add_parser('branch')
+    
+    reseller.add_argument('--name', type=str, required=True,help="name of the reseller to be created")
+    reseller.add_argument('-f','--templateFile', type=str, required=False,help="template file to inherit the variables")
+
+    subscriber.add_argument('--name', type=str, required=True,help="name of the subscriber to be created")
+    subscriber.add_argument('--parentName', type=str, required=True,help="name of the parent org, enter either reseller name or csp")
+    subscriber.add_argument('-f','--templateFile', type=str, required=False,help="template file to inherit the variables")
+
+    branch.add_argument('--name', type=str, required=True,help="name of the branch to be created")
+    branch.add_argument('--orgName', type=str, required=True,help="name of the subscriber org of the branch")
+    branch.add_argument('--parentName', type=str, required=True,help="parent of the subscriber org (reseller/csp)")
+    branch.add_argument('-f','--templateFile', type=str, required=False,help="template file to inherit the variables")
+  
+    args=parser.parse_args()
+    
+    logging.info("labdeploy {} {} {} command is sent".format(args.op,args.ob,args.name))
+    
+    # Get the token for the CRUD operations
+    token=getToken(username,password,org)
+    
+    if token:
+        logging.info("Token is retrieved sucessfully")
+
+    # Parse the user's intent and call the appropriate functions
+    if args.op == "delete":
+        if args.ob == "reseller":
+            deleteReseller(token,args.name)
+        if args.ob == "subscriber":
+            deleteSubscriber(token,args.name,args.parentName)
+        if args.ob == "branch":
+            deleteBranch(token,args.name,args.orgName,args.parentName)
+    else:
+        f=open(args.templateFile,'r')
+        jsonData=json.load(f)
+        jsonData["name"]=args.name
+        f.close()
+
+        if args.ob == "reseller":
+            createReseller(token,args.name,jsonData)
+        if args.ob == "subscriber":
+            createSubscriber(token,args.name,args.parentName,jsonData)
+        if args.ob == "branch":
+            createBranch(token,args.name,args.orgName,args.parentName,jsonData)
+    
+    logging.info("labdeploy instance terminated")
