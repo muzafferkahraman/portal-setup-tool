@@ -27,6 +27,7 @@ import argparse
 import requests
 import logging
 import json
+import platform
 
 class LabDeploy:
 
@@ -254,8 +255,10 @@ class LabDeploy:
 if __name__=="__main__":
 
     # Select the logfile path (linux/windows) and set the log file format
-    # logfile = "/var/log/labdeploy.log"
-    logfile = "c:/tmp/labdeploy.log"
+    if platform.system() == "Windows":
+        logfile = "/var/log/labdeploy.log"
+    if platform.system() == "Linux":
+        logfile = "c:/tmp/labdeploy.log"
     logging.basicConfig(filename=logfile,level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
     logging.info("labdeploy instance started")
 
