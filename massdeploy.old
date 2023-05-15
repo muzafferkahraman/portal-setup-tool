@@ -7,8 +7,8 @@ This script utilizes labdeploy.py's class methods
 
 Example Usage:
 
-python massdeploy.py create -r 2 -s 2 -b 2
-python massdeploy.py delete -r 2 -s 2 -b 2
+python massdeploy.py create -r 2 -s 2 -b 2 -p 5
+python massdeploy.py delete -r 2 -s 2 -b 2 -p 2
 
 where 
 
@@ -29,8 +29,10 @@ import argparse
 if __name__ == "__main__":
 
     # Select the logfile path (linux/windows) and set the log file format
-    # logfile = "/var/log/labdeploy.log"
-    logfile = "c:/tmp/labdeploy.log"
+    if platform.system() == "Windows":
+        logfile = "c:/tmp/labdeploy.log"
+    if platform.system() == "Linux":
+        logfile = "/var/log/labdeploy.log"
     logging.basicConfig(filename=logfile,level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
     logging.info("mass creation instance started")
 
