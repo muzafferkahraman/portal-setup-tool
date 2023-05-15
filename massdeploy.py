@@ -57,9 +57,9 @@ if __name__ == "__main__":
 
     # Select the logfile path (linux/windows) and set the log file format
     if platform.system() == "Windows":
-        logfile = "/var/log/labdeploy.log"
-    if platform.system() == "Linux":
         logfile = "c:/tmp/labdeploy.log"
+    if platform.system() == "Linux":
+        logfile = "/var/log/labdeploy.log"
     logging.basicConfig(filename=logfile,level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
     logging.info("mass creation instance started")
 
