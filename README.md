@@ -12,12 +12,19 @@ python labdeploy.py create subscriber --name aasubscriber1 --parentName aaaresel
 python labdeploy.py create subscriber --name aasubscriber2 --parentName csp  -f subscriber.json       
 python labdeploy.py create branch --name nsg1 --orgName aasubscriber1 --parentName aaareseller  -f branch.json    
 python labdeploy.py create branch --name nsg2 --orgName aasubscriber2 --parentName csp  -f branch.json
+
+python labdeploy.py create rg --name rg1 --orgName aasubscriber1 --parentName aaareseller  -f rg.json -fn branch.json    
+python labdeploy.py create rg --name rg1 --orgName aasubscriber2 --parentName csp  -f rg.json -fn branch.json    
+* Each of the last 2 commands create 2 NSGs (rg1nsg1 and rg2nsg2) and combines them under a RG named rg1
+* Template for the NSGs inside the RG are specfied with -fn argument key
   
 
 for deleting
 	
 > python labdeploy.py delete  branch --name nsg2 --orgName aasubscriber2 --parentName csp
 python labdeploy.py delete  branch --name nsg1 --orgName aasubscriber1 --parentName aaareseller 
+python labdeploy.py delete --name rg1 --orgName aasubscriber1 --parentName aaareseller     
+python labdeploy.py delete --name rg1 --orgName aasubscriber2 --parentName csp
 python labdeploy.py delete  subscriber --name aasubscriber1 --parentName aaareseller
 python labdeploy.py delete  subscriber --name aasubscriber2 --parentName csp        
 python labdeploy.py delete  reseller --name aaareseller
@@ -36,10 +43,12 @@ This script utilizes labdeploy.py's class methods
 **Example Usage:**
 
 for creating 
-> python massdeploy.py create -r 2 -s 2 -b 2 -p 5<br /> 
+> python massdeploy.py create -r 2 -s 2 -b 2 -g 2 -p 5<br /> 
 
 for deleting
-> python massdeploy.py delete -r 2 -s 2 -b 2 -p 2
+> python massdeploy.py delete -r 2 -s 2 -p 2
+
+* You don't need to specify branches and RGs when deleting
 
 where 
 
@@ -48,6 +57,8 @@ where
 -s is the number of subscribers per reseller
 
 -b is the number of branches per subscriber
+
+-g is the number of redundant groups per subscriber 
 
 -p is the number of the simultaneous processes, 5 is reccomended for creation, and 2 for deletion
 
