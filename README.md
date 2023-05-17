@@ -7,27 +7,25 @@ v 1.0 2023
 
 for creating
 
-> python labdeploy.py create reseller --name aaareseller -f reseller.json
-python labdeploy.py create subscriber --name aasubscriber1 --parentName aaareseller -f subscriber.json        
-python labdeploy.py create subscriber --name aasubscriber2 --parentName csp  -f subscriber.json       
-python labdeploy.py create branch --name nsg1 --orgName aasubscriber1 --parentName aaareseller  -f branch.json    
-python labdeploy.py create branch --name nsg2 --orgName aasubscriber2 --parentName csp  -f branch.json
-
-python labdeploy.py create rg --name rg1 --orgName aasubscriber1 --parentName aaareseller  -f rg.json -fn branch.json    
-python labdeploy.py create rg --name rg1 --orgName aasubscriber2 --parentName csp  -f rg.json -fn branch.json    
-* Each of the last 2 commands create 2 NSGs (rg1nsg1 and rg2nsg2) and combines them under a RG named rg1
-* Template for the NSGs inside the RG are specfied with -fn argument key
+> python labdeploy.py create reseller --name aaareseller -f reseller.json <br />
+python labdeploy.py create subscriber --name aasubscriber1 --parentName aaareseller -f subscriber.json <br />    
+python labdeploy.py create subscriber --name aasubscriber2 --parentName csp  -f subscriber.json <br />      
+python labdeploy.py create branch --name nsg1 --orgName aasubscriber1 --parentName aaareseller  -f branch.json <br /> 
+python labdeploy.py create branch --name nsg2 --orgName aasubscriber2 --parentName csp  -f branch.json <br />
+python labdeploy.py create rg --name rg1 --orgName aasubscriber1 --parentName aaareseller  -f rg.json -fn branch.json <br />    
+python labdeploy.py create rg --name rg1 --orgName aasubscriber2 --parentName csp  -f rg.json -fn branch.json <br />   
+* Each of the last 2 commands create 2 NSGs (rg1nsg1 and rg2nsg2) and combines them under a RG named rg1 
   
 
 for deleting
 	
-> python labdeploy.py delete  branch --name nsg2 --orgName aasubscriber2 --parentName csp
-python labdeploy.py delete  branch --name nsg1 --orgName aasubscriber1 --parentName aaareseller 
-python labdeploy.py delete --name rg1 --orgName aasubscriber1 --parentName aaareseller     
-python labdeploy.py delete --name rg1 --orgName aasubscriber2 --parentName csp
-python labdeploy.py delete  subscriber --name aasubscriber1 --parentName aaareseller
-python labdeploy.py delete  subscriber --name aasubscriber2 --parentName csp        
-python labdeploy.py delete  reseller --name aaareseller
+> python labdeploy.py delete  branch --name nsg2 --orgName aasubscriber2 --parentName csp <br />
+python labdeploy.py delete  branch --name nsg1 --orgName aasubscriber1 --parentName aaareseller <br />
+python labdeploy.py delete --name rg1 --orgName aasubscriber1 --parentName aaareseller <br />
+python labdeploy.py delete --name rg1 --orgName aasubscriber2 --parentName csp <br />
+python labdeploy.py delete  subscriber --name aasubscriber1 --parentName aaareseller <br />
+python labdeploy.py delete  subscriber --name aasubscriber2 --parentName csp <br />   
+python labdeploy.py delete  reseller --name aaareseller <br />
 
 where parent name always indicate the reseller name/csp
 and the orgNAme is the susbscriber name that the nsg belongs to
