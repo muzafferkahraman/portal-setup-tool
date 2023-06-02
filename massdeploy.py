@@ -1,65 +1,74 @@
-'''
-Python script to create and delete mass number of Nuage SDWAN Portal Resellers,Subscribers and Branches via Portal API
-Author: Muzaffer Kahraman (Muzo) 
-v 1.0 2023
-
-This script utilizes labdeploy.py's class methods
-
-Example Usage:
-
-python massdeploy.py create -r 2 -s 2 -b 2 -g 2 -p 5
-python massdeploy.py delete -r 2 -s 2 -p 2
-
-where 
-
--r is the number of resellers
--s is the number of subscribers per reseller
--b is the number of branches per subscriber
--g is the number of redundant groups per subscriber
--p is the number of the simultaneous processes, 5 is reccomended for creation, and 2 for deletion
-
-please set -r as 0 to to specify csp
-
-'''
-
 #!/usr/bin/env python
 
 import labdeploy
 import logging
 import argparse
 import datetime
-from multiprocessing import Process
 import platform
+import json
+from queue import *
+from concurrent.futures import ThreadPoolExecutor
 
+Id_lookup={}
+Resellers=[]
 
-def createRes(token,nesne,i):
-    resname="massreseller"+str(i)
-    nesne.createReseller(token,resname,"reseller.json")
-
-def createSubs(token,nesne,resname,j,sundex):
-    subsname="masssubscriber"+str(sundex+j)
-    nesne.createSubscriber(token,subsname,resname,"subscriber.json")
-
-def createNSG(token,nesne,q,subsname,resname):
-    branchname="nsg"+str(q)     
-    nesne.createBranch(token,branchname,subsname,resname,"branch.json")
-
-def createRG(token,nesne,q,subsname,resname):
-    nsg1name="rgnsg"+str(q)+"-1"
-    nsg2name="rgnsg"+str(q)+"-2" 
-    rgname="rg"+str(q)
-    nsg1id=nesne.createBranch(token,nsg1name,subsname,resname,"branch.json")
-    nsg2id=nesne.createBranch(token,nsg2name,subsname,resname,"branch.json")
-    nesne.createRG(token,rgname,subsname,resname,nsg1id,nsg2id,"rg.json")
+def createRes(token,instance,resname):
+    id=instance.createReseller(token,resname,"reseller.json")
+    Resellers.append(resname)
+    queue.put(resname+":"+str(id))
     
-def deleteSubs(token,nesne,j,sundex,resname):
-    subsname="masssubscriber"+str(sundex+j)
-    nesne.deleteSubscriber(token,subsname,resname)
+def createSubs(token,instance,orgname,resname):
+    if resname == "csp":
+        resID=0
+    else:
+        resID=str(Id_lookup.get(resname))
 
-def deleteRes(token,nesne,i):
-    resname="massreseller"+str(i)
-    nesne.deleteReseller(token,resname)
+    id=instance.createSubscriber(token,orgname,resname,resID,"subscriber.json")
+    queue.put(orgname+":"+str(id))
 
+def createNSG(token,instance,nsgname,orgname,resname):
+    orgID=str(Id_lookup.get(orgname))
+    id=instance.createBranch(token,nsgname,orgname,orgID,resname,"branch.json")
+    queue.put(nsgname+":"+id)
+
+def createRG(token,instance,nsg1name,nsg2name,rgname,orgname,resname):
+    orgID=str(Id_lookup.get(orgname))
+    nsg1id=instance.createBranch(token,nsg1name,orgname,orgID,resname,"branch.json")
+    nsg2id=instance.createBranch(token,nsg2name,orgname,orgID,resname,"branch.json")
+    rgid=instance.createRG(token,rgname,orgname,orgID,resname,nsg1id,nsg2id,"rg.json")
+    queue.put(nsg1name+":"+nsg1id)
+    queue.put(nsg2name+":"+nsg2id)
+    queue.put(rgname+":"+rgid)
+
+def deleteRG(token,instance,nsg1name,nsg2name,rgname,orgname,resname):
+    orgID=str(Id_lookup.get(orgname))
+    nsg1ID=str(Id_lookup.get(nsg1name))
+    nsg2ID=str(Id_lookup.get(nsg2name))
+    rgID=str(Id_lookup.get(rgname))
+    instance.deleteRG(token,rgname,rgID,orgname,orgID,resname)
+    instance.deleteBranch(token,nsg1name,nsg1ID,orgname,orgID,resname)
+    instance.deleteBranch(token,nsg2name,nsg2ID,orgname,orgID,resname)
+
+def deleteNSG(token,instance,nsgname,orgname,resname):
+    orgID=str(Id_lookup.get(orgname))
+    nsgID=str(Id_lookup.get(nsgname))
+    instance.deleteBranch(token,nsgname,nsgID,orgname,orgID,resname)
+
+def deleteSubs(token,instance,orgname,resname):
+    orgID=str(Id_lookup.get(orgname))
+    instance.deleteSubscriber(token,orgname,orgID,resname)
+
+def deleteRes(token,instance,resname):
+    resID=str(Id_lookup.get(resname))
+    instance.deleteReseller(token,resname,resID)
+  
+# Construct the object name,id dictionary from the elements inside the queue and clean the queue afterwards
+# This function is called after mass creation of every object type
+
+def updateIdlookup_table():
+    for item in list(queue.queue):
+        Id_lookup.update({item.split(":")[0]:item.split(":")[1]})
+    queue.queue.clear()
 
 if __name__ == "__main__":
 
@@ -68,27 +77,30 @@ if __name__ == "__main__":
         logfile = "c:/tmp/labdeploy.log"
     if platform.system() == "Linux":
         logfile = "/var/log/labdeploy.log"
-    logging.basicConfig(filename=logfile,level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
-    logging.info("mass creation instance started")
+
+    # logging.basicConfig(filename=logfile,level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
+    # logging.info("mass creation instance started")
 
     # Specifies the commandline arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("op", choices=["create","delete"],help="creates the to be selected object")
     
+    parser.add_argument('-x','--prefix', type=str, required=True,help="name prefix for objects")
     parser.add_argument('-r','--reseller', type=int, required=True,help="number of the resellers to be created")
     parser.add_argument('-s','--subscriber', type=int, required=True,help="number of the subscribers per reseller to be created")
     parser.add_argument('-b','--branch', type=int, required=False,help="number of the branches per subscriber to be created")
     parser.add_argument('-g','--redundantgroup', type=int, required=False,help="number of the redundant groups per subscriber to be created")
-    parser.add_argument('-p','--simprocess', type=int, required=False,default=5,help="number of the simultaneous processes")
+    parser.add_argument('-i','--id', type=str, required=False,default=5,help="filename for database of object name and identity pairs")
 
     args=parser.parse_args()    
 
-    logging.info("massdeploy {} command is sent".format(args.op))    
+    # logging.info("massdeploy {} command is sent".format(args.op))    
 
     r=args.reseller
     s=args.subscriber
     b=args.branch
     g=args.redundantgroup
+    x=args.prefix
    
     massdep_instance=labdeploy.LabDeploy()
 
@@ -96,125 +108,188 @@ if __name__ == "__main__":
 
     token=massdep_instance.getToken()
 
-    max_simultaneous_process=args.simprocess
-
+    # Procedure for creating the objects
     if args.op == "create":
+    
+        # This queue is for a shared  storage between threads, for object_name,object_id pairs
+        queue = Queue()
+        
+        if r != 0:  # if at least 1 reseller is specified
 
-        if r != 0:  # if at least 1 reseller is in place
-
+            # Reseller Creation
+            executor=ThreadPoolExecutor(10) 
             for i in range(1,r+1):
-                process = Process(target=createRes,args=(token,massdep_instance,i,))
-                process.start()
-                if i % max_simultaneous_process == 0:
-                    process.join()   
-                process.join()
-            process.join()
-
-            sundex=0          
-            for i in range(1,r+1):
-                resname="massreseller"+str(i)
-                for j in range (1,s+1):
-                    process = Process(target=createSubs,args=(token,massdep_instance,resname,j,sundex,))
-                    process.start()
-                    if j % max_simultaneous_process == 0:
-                        process.join()   
-                sundex += s
-                process.join()
+                resname=x+"reseller"+str(i)
+                executor.submit(createRes,token,massdep_instance,resname)
+            executor.shutdown(wait=True)
+            updateIdlookup_table()
             
+            
+            # Subscriber Creation
+            executor1=ThreadPoolExecutor(10) 
+            for i in range(1,r+1):
+                resname=x+"reseller"+str(i)
+                for j in range (1,s+1):
+                    orgname=resname+"-subscriber"+str(j)
+                    executor1.submit(createSubs,token,massdep_instance,orgname,resname)
+            executor1.shutdown(wait=True)
+            updateIdlookup_table()
+           
+            # SA NSG Creation
             if b:
-                sundex=0
+                executor2=ThreadPoolExecutor(10) 
                 for i in range(1,r+1):
-                    resname="massreseller"+str(i)
+                    resname=x+"reseller"+str(i)
                     for j in range (1,s+1):
-                        subsname="masssubscriber"+str(sundex+j)
+                        orgname=resname+"-subscriber"+str(j)
                         for q in range (1,b+1):
-                            process = Process(target=createNSG,args=(token,massdep_instance,q,subsname,resname,))
-                            process.start()
-                            if q % max_simultaneous_process == 0:
-                                process.join() 
-                    sundex += s
-
-                sundex=0
-
+                            nsgname=orgname+"-nsg"+str(q)
+                            executor2.submit(createNSG,token,massdep_instance,nsgname,orgname,resname)
+                executor2.shutdown(wait=True)
+            updateIdlookup_table()
+        
+            # Redundant Group NSG Pair Creation
             if g:
-                sundex=0
+                executor4=ThreadPoolExecutor(5) 
                 for i in range(1,r+1):
-                    resname="massreseller"+str(i)
+                    resname=x+"reseller"+str(i)
                     for j in range (1,s+1):
-                        subsname="masssubscriber"+str(sundex+j)
+                        orgname=resname+"-subscriber"+str(j)
                         for q in range (1,g+1):
-                            process = Process(target=createRG,args=(token,massdep_instance,q,subsname,resname,))
-                            process.start()
-                            if q % max_simultaneous_process == 0:
-                                process.join() 
-                    sundex += s
-
-            process.join()
+                            nsg1name=orgname+"-rgnsg"+str(q)+"-1"
+                            nsg2name=orgname+"-rgnsg"+str(q)+"-2" 
+                            rgname=orgname+"-rg"+str(q)
+                            executor4.submit(createRG,token,massdep_instance,nsg1name,nsg2name,rgname,orgname,resname)
+                executor4.shutdown(wait=True)
+                updateIdlookup_table()
             
 
-        else: # if the subscribers are going to be the members of the csp
+        else: # if the Subscribers are going to be the members of the csp
 
+            # Subscriber Creation
+            executor=ThreadPoolExecutor(10) 
             for j in range (1,s+1):
-                process = Process(target=createSubs,args=(token,massdep_instance,"csp",j,0,))
-                process.start()
-                if j % max_simultaneous_process == 0:
-                    process.join() 
-            process.join()
+                orgname=x+"-subscriber"+str(j)
+                executor.submit(createSubs,token,massdep_instance,orgname,"csp")
+            executor.shutdown(wait=True)
+            updateIdlookup_table()
             
+             # SA NSG Creation
             if b:
+                executor=ThreadPoolExecutor(5) 
                 for j in range (1,s+1):
-                    subsname="masssubscriber"+str(j)
+                    orgname=x+"-subscriber"+str(j)
                     for q in range (1,b+1):
-                        process = Process(target=createNSG,args=(token,massdep_instance,q,subsname,"csp",))
-                        process.start()
-                        if j % max_simultaneous_process == 0:
-                            process.join() 
+                        nsgname=orgname+"-nsg"+str(q)
+                        executor.submit(createNSG,token,massdep_instance,nsgname,orgname,"csp")
+                executor.shutdown(wait=True)
+                updateIdlookup_table()
+            
+            # Redundant Group NSG Pair Creation
             if g:
+                executor4=ThreadPoolExecutor(5) 
                 for j in range (1,s+1):
-                        subsname="masssubscriber"+str(j)
-                        for q in range (1,g+1):
-                            process = Process(target=createRG,args=(token,massdep_instance,q,subsname,"csp",))
-                            process.start()
-                            if q % max_simultaneous_process == 0:
-                                process.join() 
+                    orgname=x+"-subscriber"+str(j)
+                    for q in range (1,g+1):
+                        nsg1name=orgname+"-rgnsg"+str(q)+"-1"
+                        nsg2name=orgname+"-rgnsg"+str(q)+"-2" 
+                        rgname=orgname+"-rg"+str(q)
+                        executor4.submit(createRG,token,massdep_instance,nsg1name,nsg2name,rgname,orgname,"csp")
+                executor4.shutdown(wait=True)
+                updateIdlookup_table()
 
-            process.join()
-
+        # Save the dictionary of object_name,object_id pairs to the specified json file for the use of deletion procedure
+        f=open(args.id,"w")
+        json.dump(Id_lookup,f)
+        f.close()
+        
+    # Procedure for deleting the objects
     if args.op == "delete":
 
-        if r != 0: # if at least 1 reseller is in place
-           
-            sundex=0   
-                
-            for i in range(1,r+1):
-                resname="massreseller"+str(i)
-                
-                for j in range (1,s+1):
-                    process = Process(target=deleteSubs,args=(token,massdep_instance,j,sundex,resname,))
-                    process.start()
-                    if j % max_simultaneous_process == 0:
-                        process.join()     
-                sundex += s
-                process.join()
+        # Open the specified json file and load it to the dictionary
+        f=open(args.id,"r")
+        Id_lookup=json.load(f)
+        f.close()
 
-            for i in range(1,r+1):
-                process = Process(target=deleteRes,args=(token,massdep_instance,i,))
-                process.start() 
-                if i % max_simultaneous_process == 0:
-                    process.join()   
-            process.join() 
+        if r != 0: # if at least 1 reseller is specified
             
-        else: # if the subscribers are going to be the members of the csp
+            # NSG Deletion
+            if b:
+                executor=ThreadPoolExecutor(5) 
+                for i in range(1,r+1):
+                    resname=x+"reseller"+str(i)    
+                    for j in range (1,s+1):
+                            orgname=resname+"-subscriber"+str(j)
+                            for q in range (1,b+1):
+                                nsgname=orgname+"-nsg"+str(q)
+                                executor.submit(deleteNSG,token,massdep_instance,nsgname,orgname,resname)
+                executor.shutdown(wait=True)
 
+            # Redundant Group NSG Pair Deletion
+            if g:
+                print("deleting")
+                executor4=ThreadPoolExecutor(5) 
+                for i in range(1,r+1):
+                    resname=x+"reseller"+str(i)
+                    for j in range (1,s+1):
+                        orgname=resname+"-subscriber"+str(j)
+                        for q in range (1,g+1):
+                            nsg1name=orgname+"-rgnsg"+str(q)+"-1"
+                            nsg2name=orgname+"-rgnsg"+str(q)+"-2" 
+                            rgname=orgname+"-rg"+str(q)
+                            executor4.submit(deleteRG,token,massdep_instance,nsg1name,nsg2name,rgname,orgname,resname)
+                    executor4.shutdown(wait=True)
+                
+            # Subscriber Deletion
+            executor1=ThreadPoolExecutor(20) 
+            for i in range(1,r+1):
+                resname=x+"reseller"+str(i)    
+                for j in range (1,s+1):
+                    orgname=resname+"-subscriber"+str(j)
+                    executor1.submit(deleteSubs,token,massdep_instance,orgname,resname)
+            executor1.shutdown(wait=True)
+
+            # Reseller Deletion
+            executor2=ThreadPoolExecutor(10) 
+            for i in range(1,r+1):
+                resname=x+"reseller"+str(i)
+                executor2.submit(deleteRes,token,massdep_instance,resname)
+            executor2.shutdown(wait=True) 
+             
+        else: # if the Subscribers are going to be the members of the csp
+
+            # NSG Deletion
+            if b:
+                executor3=ThreadPoolExecutor(5) 
+                for j in range (1,s+1):
+                        orgname=x+"-subscriber"+str(j)
+                        for q in range (1,b+1):
+                            nsgname=orgname+"-nsg"+str(q)
+                            executor3.submit(deleteNSG,token,massdep_instance,nsgname,orgname,"csp")
+                executor3.shutdown(wait=True)
+
+            # Redundant Group NSG Pair Deletion
+            if g:
+                executor4=ThreadPoolExecutor(5) 
+                for j in range (1,s+1):
+                    orgname=x+"-subscriber"+str(j)
+                    for q in range (1,g+1):
+                        nsg1name=orgname+"-rgnsg"+str(q)+"-1"
+                        nsg2name=orgname+"-rgnsg"+str(q)+"-2" 
+                        rgname=orgname+"-rg"+str(q)
+                        executor4.submit(deleteRG,token,massdep_instance,nsg1name,nsg2name,rgname,orgname,"csp")
+                executor4.shutdown(wait=True)
+                
+            # Subscriber Deletion
+            executor2=ThreadPoolExecutor(10)    
             for j in range (1,s+1):
-                process = Process(target=deleteSubs,args=(token,massdep_instance,j,0,"csp",))
-                process.start()
-                if j % max_simultaneous_process == 0:
-                    process.join()    
-            process.join()
-    
+                orgname=x+"-subscriber"+str(j)
+                executor2.submit(deleteSubs,token,massdep_instance,orgname,"csp")
+            executor2.shutdown(wait=True)
+
     b=datetime.datetime.now()
     print("Execution time:",b-a)
 
-        
-    
+
+
+
