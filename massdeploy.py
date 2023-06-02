@@ -1,3 +1,28 @@
+'''
+Python script to create and delete mass number of Nuage SDWAN Portal Resellers,Subscribers and Branches via Portal API
+Author: Muzaffer Kahraman (Muzo) 
+v 1.0 2023
+
+This script utilizes labdeploy.py's class methods
+
+Example Usage:
+
+python massdeploy.py create -r 2 -s 2 -b 2 -g 2 -p 5
+python massdeploy.py delete -r 2 -s 2 -p 2
+
+where 
+
+-x is the prwefix to be added to the resellers and subscribers
+-r is the number of resellers
+-s is the number of subscribers per reseller
+-b is the number of branches per subscriber
+-g is the number of redundant groups per subscriber
+-i is the file name of the json file that is going to keep (for create) / already keeps  (for delete) the name-id pairs for faster operations
+
+please set -r as 0 to to specify csp
+
+'''
+
 #!/usr/bin/env python
 
 import labdeploy
