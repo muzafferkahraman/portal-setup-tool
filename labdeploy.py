@@ -63,7 +63,6 @@ class LabDeploy:
         res=requests.post(self.auth_url, headers=headers,json=data,verify=False).json()
     
         token=res['accessToken']
-   
         return token
     
     # Requests the ID of the object matching the name and returns it
@@ -145,7 +144,7 @@ class LabDeploy:
         url= self.portal_url + "/organizations/1"
 
         res=self.sendAPI(url,token,"post",jsonData)
-  
+ 
         if str(res) == "<Response [200]>":
             message="200 - Reseller {} created sucessfully".format(name)
         else:
@@ -153,19 +152,21 @@ class LabDeploy:
     
         logging.info(message)
         print(message)
+        
+        return(res.json()['id'])
 
 
-    def createSubscriber(self,token,name,parentName,file):
+    def createSubscriber(self,token,name,parentName,parentID,file):
 
         jsonData=self.jsonGrab(file)
 
         jsonData["name"]=name
    
-        if parentName == "csp":
+        if (parentName == "csp"):
             parentID=1
-        else:
+        if (parentName!= "csp") and (parentID == 0):
             parentID=self.getID(token,"reseller",parentName)
-    
+
         url= self.portal_url + "/organizations/"+str(parentID)
 
         res=self.sendAPI(url,token,"post",jsonData)
@@ -176,38 +177,44 @@ class LabDeploy:
             message=str(res) + " Failure in creating the subscriber {} under {}".format(name,parentName)
     
         logging.info(message)
+        
         print(message)
 
-    def createBranch(self,token,name,orgName,parentName,file):
+        return(res.json()['id'])
+    
+
+    def createBranch(self,token,name,orgName,orgID,parentName,file):
 
         jsonData=self.jsonGrab(file)
 
         jsonData["name"]=name
 
-        if parentName == "csp":
-            parentID=1
-        else:
-            parentID=self.getID(token,"reseller",parentName)
-    
-        orgID=self.getID(token,"subscriber",orgName,str(parentID))
-
+        if orgID == 0:
+            print("matched!")
+            if parentName == "csp":
+                parentID=1
+            else:
+                parentID=self.getID(token,"reseller",parentName)
+            orgID=self.getID(token,"subscriber",orgName,str(parentID))
+       
         url= self.portal_url + "/organizations/"+orgID+"/branches"
-
+        
         res=self.sendAPI(url,token,"post",jsonData)
-        vsdId=res.json()
+       
         vsdId=res.json()['vsdId']
-          
+        
         if str(res) == "<Response [200]>":
             message="200 - Branch {} created sucessfully under {} of the parent {}".format(name,orgName,parentName)
         else:
             message=str(res) + " Failure in creating the branch {} under {} of the parent {}".format(name,orgName,parentName)
     
         logging.info(message)
+        
         print(message)
 
         return(vsdId)
     
-    def createRG(self,token,name,orgName,parentName,nsg1id,nsg2id,file):
+    def createRG(self,token,name,orgName,orgID,parentName,nsg1id,nsg2id,file):
 
         jsonData=self.jsonGrab(file)
 
@@ -215,16 +222,19 @@ class LabDeploy:
         jsonData["gatewayPeer1ID"]=nsg1id
         jsonData["gatewayPeer2ID"]=nsg2id
 
-        if parentName == "csp":
-            parentID=1
-        else:
-            parentID=self.getID(token,"reseller",parentName)
-    
-        orgID=self.getID(token,"subscriber",orgName,str(parentID))
+        if orgID == 0:
+            if parentName == "csp":
+                parentID=1
+            else:
+                parentID=self.getID(token,"reseller",parentName)
+
+            orgID=self.getID(token,"subscriber",orgName,str(parentID))
 
         url= self.portal_url + "/organizations/"+orgID+"/redundancygroups"
 
         res=self.sendAPI(url,token,"post",jsonData)
+
+        vsdId=res.json()['ID']
 
         if str(res) == "<Response [200]>":
             message="200 - RG {} created sucessfully under {} of the parent {}".format(name,orgName,parentName)
@@ -234,14 +244,17 @@ class LabDeploy:
         logging.info(message)
         print(message)
 
-    def deleteReseller(self,token,name):
+        return(vsdId)
 
-        id=self.getID(token,"reseller",name)
+    def deleteReseller(self,token,name,id):
+
+        if id==0:
+            id=self.getID(token,"reseller",name)
                
         url= self.portal_url + "/organizations/"+id
         
         res=self.sendAPI(url,token,"del")
-  
+        
         if str(res) == "<Response [200]>":
             message="200 - Reseller {} deleted sucessfully".format(name)
         else:
@@ -250,56 +263,62 @@ class LabDeploy:
         logging.info(message)
         print(message)
 
-    def deleteSubscriber(self,token,name,parentName):
+    def deleteSubscriber(self,token,orgname,orgID,parentName):
 
-        if parentName == "csp":
-            parentID=1
-        else:
-            parentID=self.getID(token,"reseller",parentName)
-    
-        orgID=self.getID(token,"subscriber",name,str(parentID))
-        url= self.portal_url + "/organizations/"+orgID
+        if orgID == 0:
+            if parentName == "csp":
+                parentID=1
+            else:
+                parentID=self.getID(token,"reseller",parentName)
+            orgID=self.getID(token,"subscriber",orgname,str(parentID))
+      
+        url= self.portal_url + "/organizations/"+str(orgID)
         res=self.sendAPI(url,token,"del")
   
         if str(res) == "<Response [200]>":
-            message="200 - Subscriber {} deleted sucessfully under {}".format(name,parentName)
+            message="200 - Subscriber {} deleted sucessfully under {}".format(orgname,parentName)
         else:
-            message=str(res) + " Failure in deleting the subscirber {} under {}".format(name,parentName)
+            message=str(res) + " Failure in deleting the subscirber {} under {}".format(orgname,parentName)
     
         logging.info(message)
         print(message)
 
-    def deleteBranch(self,token,name,orgName,parentName):
-    
-        if parentName == "csp":
-            parentID=1
-        else:
-            parentID=self.getID(token,"reseller",parentName)
-    
-        orgID=self.getID(token,"subscriber",orgName,str(parentID))
-        branchID=self.getID(token,"branch",name,orgID)
+    def deleteBranch(self,token,branchName,branchID,orgName,orgID,parentName):
+
+        if orgID == 0:
+            if parentName == "csp":
+                parentID=1
+            else:
+                parentID=self.getID(token,"reseller",parentName)
+            orgID=self.getID(token,"subscriber",orgName,str(parentID))
+
+        if branchID == 0:
+            branchID=self.getID(token,"branch",branchName,orgID)
             
         url=self.portal_url + "/organizations/"+orgID+"/branches/"+str(branchID)
         res=self.sendAPI(url,token,"del")
   
         if str(res) == "<Response [200]>":
-            message="200 - Branch {} deleted sucessfully under {} of the parent {}".format(name,orgName,parentName)
+            message="200 - Branch {} deleted sucessfully under {} of the parent {}".format(branchName,orgName,parentName)
         else:
-            message=str(res) + " Failure in deleting the branch {} under {} of the parent {}".format(name,orgName,parentName)
+            message=str(res) + " Failure in deleting the branch {} under {} of the parent {}".format(branchName,orgName,parentName)
     
         logging.info(message)
+
         print(message)
 
-    def deleteRG(self,token,name,orgName,parentName):
+    def deleteRG(self,token,name,rgID,orgName,orgID,parentName):
 
-        if parentName == "csp":
-            parentID=1
-        else:
-            parentID=self.getID(token,"reseller",parentName)
-    
-        orgID=self.getID(token,"subscriber",orgName,str(parentID))
-        rgID=self.getID(token,"rg",name,orgID)
-    
+        if orgID == 0:
+            if parentName == "csp":
+                parentID=1
+            else:
+                parentID=self.getID(token,"reseller",parentName)
+            orgID=self.getID(token,"subscriber",orgName,str(parentID))
+        
+        if rgID == 0:
+            rgID=self.getID(token,"rg",name,orgID)
+                    
         url=self.portal_url + "/organizations/"+orgID+"/redundancygroups/"+str(rgID)
         res=self.sendAPI(url,token,"del")
   
@@ -309,6 +328,7 @@ class LabDeploy:
             message=str(res) + " Failure in deleting the RG {} under {} of the parent {}".format(name,orgName,parentName)
     
         logging.info(message)
+
         print(message)
 
     def __del__(self):
@@ -329,6 +349,7 @@ if __name__=="__main__":
     # Specifies the commandline arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("op", choices=["create","delete"],help="creates the to be selected object")
+    
     subparser = parser.add_subparsers(dest='ob')
     reseller = subparser.add_parser('reseller')
     subscriber = subparser.add_parser('subscriber')
@@ -373,25 +394,25 @@ if __name__=="__main__":
         if args.ob == "reseller":
             portal.createReseller(token,args.name,args.templateFile)
         if args.ob == "subscriber":
-            portal.createSubscriber(token,args.name,args.parentName,args.templateFile)
+            portal.createSubscriber(token,args.name,args.parentName,0,args.templateFile)
         if args.ob == "branch":
-            portal.createBranch(token,args.name,args.orgName,args.parentName,args.templateFile)
+            portal.createBranch(token,args.name,args.orgName,0,args.parentName,args.templateFile)
         if args.ob == "rg":
-            nsgid1=portal.createBranch(token,args.name+"nsg1",args.orgName,args.parentName,args.NSGtemplateFile)
-            nsgid2=portal.createBranch(token,args.name+"nsg2",args.orgName,args.parentName,args.NSGtemplateFile)
-            portal.createRG(token,args.name,args.orgName,args.parentName,nsgid1,nsgid2,args.templateFile)
+            nsg1id=portal.createBranch(token,args.name+"nsg1",args.orgName,0,args.parentName,args.NSGtemplateFile)
+            nsg2id=portal.createBranch(token,args.name+"nsg2",args.orgName,0,args.parentName,args.NSGtemplateFile)
+            portal.createRG(token,args.name,args.orgName,0,args.parentName,nsg1id,nsg2id,args.templateFile)
                 
     if args.op == "delete":
         if args.ob == "reseller":
-            portal.deleteReseller(token,args.name)
+            portal.deleteReseller(token,args.name,0)
         if args.ob == "subscriber":
-            portal.deleteSubscriber(token,args.name,args.parentName)
+            portal.deleteSubscriber(token,args.name,0,args.parentName)
         if args.ob == "branch":
-            portal.deleteBranch(token,args.name,args.orgName,args.parentName)
+            portal.deleteBranch(token,args.name,0,args.orgName,0,args.parentName)
         if args.ob == "rg":
-            portal.deleteRG(token,args.name,args.orgName,args.parentName)
-            portal.deleteBranch(token,args.name+"nsg1",args.orgName,args.parentName)
-            portal.deleteBranch(token,args.name+"nsg2",args.orgName,args.parentName)
+            portal.deleteRG(token,args.name,0,args.orgName,0,args.parentName)
+            portal.deleteBranch(token,args.name+"nsg1",0,args.orgName,0,args.parentName)
+            portal.deleteBranch(token,args.name+"nsg2",0,args.orgName,0,args.parentName)
     
 
 
